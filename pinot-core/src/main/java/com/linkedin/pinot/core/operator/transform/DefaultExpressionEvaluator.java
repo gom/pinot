@@ -15,15 +15,18 @@
  */
 package com.linkedin.pinot.core.operator.transform;
 
+import com.linkedin.pinot.common.data.FieldSpec;
 import com.linkedin.pinot.common.request.transform.TransformExpressionTree;
+import com.linkedin.pinot.core.common.BlockValSet;
+import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
+import com.linkedin.pinot.core.operator.docvalsets.ProjectionBlockValSet;
 import com.linkedin.pinot.core.operator.transform.function.TransformFunction;
 import com.linkedin.pinot.core.operator.transform.function.TransformFunctionFactory;
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
-import com.linkedin.pinot.core.common.Block;
-import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
-import com.linkedin.pinot.core.operator.docvalsets.ProjectionBlockValSet;
-import com.linkedin.pinot.core.operator.transform.result.DoubleArrayTransformResult;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import javax.annotation.Nonnull;
 
 
 /**
@@ -31,15 +34,14 @@ import java.util.List;
  */
 public class DefaultExpressionEvaluator implements TransformExpressionEvaluator {
 
-  private final TransformExpressionTree _expressionTree;
-  private TransformResult _result;
+  private final List<TransformExpressionTree> _expressionTrees;
 
   /**
    * Constructor for the class.
-   * @param expressionTree Expression tree to evaluate
+   * @param expressionTrees List of expression trees to evaluate
    */
-  public DefaultExpressionEvaluator(TransformExpressionTree expressionTree) {
-    _expressionTree = expressionTree;
+  public DefaultExpressionEvaluator(@Nonnull List<TransformExpressionTree> expressionTrees) {
+    _expressionTrees = expressionTrees;
   }
 
   /**
@@ -48,17 +50,14 @@ public class DefaultExpressionEvaluator implements TransformExpressionEvaluator 
    * @param projectionBlock Projection block to evaluate the expression for.
    */
   @Override
-  public void evaluate(ProjectionBlock projectionBlock) {
-    _result = evaluateExpression(projectionBlock, _expressionTree);
-  }
+  public Map<String, TransformResult> evaluate(ProjectionBlock projectionBlock) {
+    Map<String, TransformResult> resultsMap = new HashMap<>(_expressionTrees.size());
 
-  /**
-   * {@inheritDoc}
-   * @return Returns the result of transform expression evaluation.
-   */
-  @Override
-  public TransformResult getResult() {
-    return _result;
+    for (TransformExpressionTree expressionTree : _expressionTrees) {
+      TransformResult result = evaluateExpression(projectionBlock, expressionTree);
+      resultsMap.put(expressionTree.getColumn(), result);
+    }
+    return resultsMap;
   }
 
   /**
@@ -78,20 +77,48 @@ public class DefaultExpressionEvaluator implements TransformExpressionEvaluator 
       Object[] transformArgs = new Object[numChildren];
 
       for (int i = 0; i < numChildren; i++) {
-        transformArgs[i] = evaluateExpression(projectionBlock, children.get(i)).getResultArray();
+        transformArgs[i] = evaluateExpression(projectionBlock, children.get(i)).getResult();
       }
       return function.transform(projectionBlock.getNumDocs(), transformArgs);
     } else {
       String column = expressionTree.getColumn();
 
-      // TODO: Support non numeric columns.
       if (column != null) {
-        ProjectionBlockValSet blockValSet = (ProjectionBlockValSet) projectionBlock.getBlockValueSet(column);
-        double[] values = blockValSet.getDoubleValuesSV();
-        return new DoubleArrayTransformResult(values);
+        BlockValSet blockValSet = projectionBlock.getBlockValueSet(column);
+        return buildTransformResult(blockValSet);
       } else {
         throw new RuntimeException("Literals not supported in transforms yet");
       }
+    }
+  }
+
+  /**
+   * Helper method to build TransformResult object for the given set of values.
+   *
+   * @param blockValSet Value set for which to build the result
+   * @return TransformResult containing values from the given value-set.
+   */
+  private TransformResult buildTransformResult(BlockValSet blockValSet) {
+    FieldSpec.DataType valueType = blockValSet.getValueType();
+
+    switch (valueType) {
+      case INT:
+        return new TransformResult(blockValSet.getIntValuesSV(), valueType);
+
+      case LONG:
+        return new TransformResult(blockValSet.getLongValuesSV(), valueType);
+
+      case FLOAT:
+        return new TransformResult(blockValSet.getFloatValuesMV(), valueType);
+
+      case DOUBLE:
+        return new TransformResult(blockValSet.getDoubleValuesSV(), valueType);
+
+      case STRING:
+        return new TransformResult(blockValSet.getStringValuesSV(), valueType);
+
+      default:
+        throw new IllegalArgumentException("Illegal data type for transform evaluator: " + valueType);
     }
   }
 

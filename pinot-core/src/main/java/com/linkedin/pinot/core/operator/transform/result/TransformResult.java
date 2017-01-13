@@ -15,17 +15,37 @@
  */
 package com.linkedin.pinot.core.operator.transform.result;
 
+import com.linkedin.pinot.common.data.FieldSpec;
+
+
 /**
  * Interface for representing the results of a transform function.
  */
-public interface TransformResult {
+public class TransformResult {
+  private final FieldSpec.DataType _resultType;
+  private final Object _result;
+
+  public TransformResult(Object result, FieldSpec.DataType resultType) {
+    _result = result;
+    _resultType = resultType;
+  }
 
   /**
    * Returns the underlying array storage for the results.
    * Client responsible for passing the correct instance of T.
    *
-   * @param <T> Data type of result.
    * @return Result array containing results of transform.
    */
-  <T> T getResultArray();
+  public <T> T getResult() {
+    return (T) _result;
+  }
+
+  /**
+   * Returns the data type for the result.
+   *
+   * @return Data type for the result.
+   */
+  public FieldSpec.DataType getResultType() {
+    return _resultType;
+  }
 }

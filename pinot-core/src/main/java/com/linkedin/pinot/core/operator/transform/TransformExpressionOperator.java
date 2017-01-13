@@ -24,6 +24,7 @@ import com.linkedin.pinot.core.operator.ExecutionStatistics;
 import com.linkedin.pinot.core.operator.MProjectionOperator;
 import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
 import com.linkedin.pinot.core.operator.blocks.TransformBlock;
+import java.util.List;
 
 
 /**
@@ -39,22 +40,23 @@ public class TransformExpressionOperator extends BaseOperator {
    * Constructor for the class
    *
    * @param projectionOperator Projection operator
-   * @param expressionTree Expression tree to evaluate
+   * @param expressionTrees Expression tree to evaluate
    */
-  public TransformExpressionOperator(MProjectionOperator projectionOperator, TransformExpressionTree expressionTree) {
+  public TransformExpressionOperator(MProjectionOperator projectionOperator,
+      List<TransformExpressionTree> expressionTrees) {
 
     Preconditions.checkArgument((projectionOperator != null));
-    Preconditions.checkArgument((expressionTree != null));
+    Preconditions.checkArgument((expressionTrees != null));
 
     _projectionOperator = projectionOperator;
-    _expressionEvaluator = new DefaultExpressionEvaluator(expressionTree);
+    _expressionEvaluator = new DefaultExpressionEvaluator(expressionTrees);
   }
 
   @Override
   public Block getNextBlock() {
     ProjectionBlock projectionBlock = _projectionOperator.getNextBlock();
-    _expressionEvaluator.evaluate(projectionBlock);
-    return new TransformBlock(projectionBlock, _expressionEvaluator.getResult());
+    return (projectionBlock != null) ? new TransformBlock(projectionBlock,
+        _expressionEvaluator.evaluate(projectionBlock)) : null;
   }
 
   @Override
@@ -80,5 +82,9 @@ public class TransformExpressionOperator extends BaseOperator {
   @Override
   public ExecutionStatistics getExecutionStatistics() {
     return _projectionOperator.getExecutionStatistics();
+  }
+
+  public int getNumProjectionColumns() {
+    return _projectionOperator.getNumProjectionColumns();
   }
 }

@@ -17,23 +17,19 @@ package com.linkedin.pinot.core.operator.transform;
 
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
 import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
+import java.util.Map;
 
 
 /**
  * Interface for Transform expressions evaluation.
+ *
  */
 public interface TransformExpressionEvaluator {
 
   /**
-   * Evaluates the transform expression on a given set of docIds.
+   * Evaluates a list of expressions on a given set of docIds.
    * @param projectionBlock Projection block for which to evaluate the expression for.
+   * @return Map containing result for each transform expression.
    */
-  void evaluate(ProjectionBlock projectionBlock);
-
-
-  /**
-   * Returns the results of transform expression evaluation.
-   * @return Result of transform expression
-   */
-  TransformResult getResult();
+  Map<String, TransformResult> evaluate(ProjectionBlock projectionBlock);
 }

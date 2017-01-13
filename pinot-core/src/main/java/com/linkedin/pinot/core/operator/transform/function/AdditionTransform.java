@@ -15,16 +15,19 @@
  */
 package com.linkedin.pinot.core.operator.transform.function;
 
+import com.linkedin.pinot.common.data.FieldSpec;
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
-import com.linkedin.pinot.core.operator.transform.result.DoubleArrayTransformResult;
 import javax.annotation.Nonnull;
+import javax.annotation.concurrent.NotThreadSafe;
 
 
 /**
  * This class implements the Addition transformation.
  */
+@NotThreadSafe
 public class AdditionTransform implements TransformFunction {
   private static final String TRANSFORM_NAME = "add";
+  private double[] _sum; // Result of addition transform.
 
   /**
    * {@inheritDoc}
@@ -38,15 +41,17 @@ public class AdditionTransform implements TransformFunction {
    */
   @Override
   public TransformResult transform(int length, @Nonnull Object... inputs) {
-    double[] sum = new double[((double[]) inputs[0]).length];
+    if (_sum == null) {
+      _sum = new double[length];
+    }
 
     for (Object input : inputs) {
       double[] values = (double[]) input;
       for (int j = 0; j < length; j++) {
-        sum[j] += values[j];
+        _sum[j] += values[j];
       }
     }
-    return new DoubleArrayTransformResult(sum);
+    return new TransformResult(_sum, FieldSpec.DataType.DOUBLE);
   }
 
   /**

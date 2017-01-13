@@ -49,7 +49,6 @@ public class TransformExpressionTree {
     _literal = literal;
     _transformName = transformName;
     _children = children;
-
   }
 
   /**
@@ -73,8 +72,12 @@ public class TransformExpressionTree {
       }
     } else if (rootNode instanceof FunctionCallAstNode) {
       List<TransformExpressionTree> children = new ArrayList<>();
+
+      FunctionCallAstNode functionCallAstNode = (FunctionCallAstNode) rootNode;
       expressionTree =
-          new TransformExpressionTree(null, null, ((FunctionCallAstNode) rootNode).getName(), children);
+          new TransformExpressionTree(functionCallAstNode.getExpression(), null, functionCallAstNode.getName(),
+              children);
+
       for (AstNode child : rootNode.getChildren()) {
         children.add(buildTree(child));
       }

@@ -19,6 +19,7 @@ import com.linkedin.pinot.common.data.FieldSpec;
 import com.linkedin.pinot.common.data.MetricFieldSpec;
 import com.linkedin.pinot.common.data.Schema;
 import com.linkedin.pinot.common.request.AggregationInfo;
+import com.linkedin.pinot.common.request.transform.TransformExpressionTree;
 import com.linkedin.pinot.common.segment.ReadMode;
 import com.linkedin.pinot.core.data.GenericRow;
 import com.linkedin.pinot.core.data.readers.RecordReader;
@@ -30,8 +31,9 @@ import com.linkedin.pinot.core.operator.MProjectionOperator;
 import com.linkedin.pinot.core.operator.aggregation.AggregationExecutor;
 import com.linkedin.pinot.core.operator.aggregation.AggregationFunctionContext;
 import com.linkedin.pinot.core.operator.aggregation.DefaultAggregationExecutor;
-import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
+import com.linkedin.pinot.core.operator.blocks.TransformBlock;
 import com.linkedin.pinot.core.operator.filter.MatchEntireSegmentOperator;
+import com.linkedin.pinot.core.operator.transform.TransformExpressionOperator;
 import com.linkedin.pinot.core.plan.AggregationFunctionInitializer;
 import com.linkedin.pinot.core.segment.creator.impl.SegmentIndexCreationDriverImpl;
 import com.linkedin.pinot.core.segment.index.loader.Loaders;
@@ -39,12 +41,12 @@ import com.linkedin.pinot.util.TestUtils;
 import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.mutable.MutableLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testng.Assert;
@@ -132,9 +134,12 @@ public class DefaultAggregationExecutorTest {
     }
     int totalRawDocs = _indexSegment.getSegmentMetadata().getTotalRawDocs();
     MatchEntireSegmentOperator matchEntireSegmentOperator = new MatchEntireSegmentOperator(totalRawDocs);
-    BReusableFilteredDocIdSetOperator docIdSetOperator = new BReusableFilteredDocIdSetOperator(matchEntireSegmentOperator,totalRawDocs, 10000);
+    BReusableFilteredDocIdSetOperator docIdSetOperator =
+        new BReusableFilteredDocIdSetOperator(matchEntireSegmentOperator, totalRawDocs, 10000);
     MProjectionOperator projectionOperator = new MProjectionOperator(dataSourceMap, docIdSetOperator);
-    ProjectionBlock projectionBlock = (ProjectionBlock) projectionOperator.nextBlock();
+    TransformExpressionOperator transformOperator =
+        new TransformExpressionOperator(projectionOperator, Collections.<TransformExpressionTree>emptyList());
+    TransformBlock projectionBlock = (TransformBlock) transformOperator.nextBlock();
     int numAggFuncs = _aggregationInfoList.size();
     AggregationFunctionContext[] aggrFuncContextArray = new AggregationFunctionContext[numAggFuncs];
     AggregationFunctionInitializer aggFuncInitializer =

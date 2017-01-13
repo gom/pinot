@@ -16,8 +16,8 @@
 package com.linkedin.pinot.core.operator.transform.function;
 
 import com.google.common.base.Preconditions;
+import com.linkedin.pinot.common.data.FieldSpec;
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
-import com.linkedin.pinot.core.operator.transform.result.DoubleArrayTransformResult;
 import javax.annotation.Nonnull;
 
 
@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
  */
 public class DivisionTransform implements TransformFunction {
   private static final String TRANSFORM_NAME = "div";
+  private double[] _result;
 
   /**
    * {@inheritDoc}
@@ -41,14 +42,17 @@ public class DivisionTransform implements TransformFunction {
   public TransformResult transform(int length, @Nonnull Object... input) {
     Preconditions.checkArgument((input.length == 2), "Division transform expects exactly two arguments");
 
+    if (_result == null) {
+      _result = new double[length];
+    }
+
     double[] numerators = (double[]) input[0];
     double[] denominators = (double[]) input[1];
 
-    double[] result = new double[length];
     for (int i = 0; i < length; i++) {
-      result[i] = numerators[i] / denominators[i];
+      _result[i] = numerators[i] / denominators[i];
     }
-    return new DoubleArrayTransformResult(result);
+    return new TransformResult(_result, FieldSpec.DataType.DOUBLE);
   }
 
   /**

@@ -15,8 +15,8 @@
  */
 package com.linkedin.pinot.core.operator.transform.function;
 
+import com.linkedin.pinot.common.data.FieldSpec;
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
-import com.linkedin.pinot.core.operator.transform.result.DoubleArrayTransformResult;
 import java.util.Arrays;
 import javax.annotation.Nonnull;
 
@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
  */
 public class MultiplicationTransform implements TransformFunction {
   private static final String TRANSFORM_NAME = "mult";
+  private double[] _product;
 
   /**
    * {@inheritDoc}
@@ -36,16 +37,18 @@ public class MultiplicationTransform implements TransformFunction {
    */
   @Override
   public TransformResult transform(int length, @Nonnull Object... inputs) {
-    double[] product = new double[((double[]) inputs[0]).length];
-    Arrays.fill(product, 1);
+    if (_product == null) {
+      _product = new double[length];
+    }
 
+    Arrays.fill(_product, 1);
     for (Object input : inputs) {
       double[] values = (double[]) input;
       for (int j = 0; j < length; j++) {
-        product[j] *= values[j];
+        _product[j] *= values[j];
       }
     }
-    return new DoubleArrayTransformResult(product);
+    return new TransformResult(_product, FieldSpec.DataType.DOUBLE);
   }
 
   /**

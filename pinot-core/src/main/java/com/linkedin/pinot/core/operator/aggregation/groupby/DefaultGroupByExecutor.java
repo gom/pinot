@@ -17,13 +17,12 @@ package com.linkedin.pinot.core.operator.aggregation.groupby;
 
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.common.request.GroupBy;
-import com.linkedin.pinot.core.common.Block;
 import com.linkedin.pinot.core.common.BlockMetadata;
+import com.linkedin.pinot.core.common.BlockValSet;
 import com.linkedin.pinot.core.operator.aggregation.AggregationFunctionContext;
 import com.linkedin.pinot.core.operator.aggregation.function.AggregationFunction;
 import com.linkedin.pinot.core.operator.aggregation.function.AggregationFunctionFactory;
-import com.linkedin.pinot.core.operator.blocks.ProjectionBlock;
-import com.linkedin.pinot.core.operator.docvalsets.ProjectionBlockValSet;
+import com.linkedin.pinot.core.operator.blocks.TransformBlock;
 import com.linkedin.pinot.core.plan.DocIdSetPlanNode;
 import java.util.List;
 import javax.annotation.Nonnull;
@@ -87,7 +86,7 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
   /**
    * {@inheritDoc}
    * No-op for this implementation of GroupKeyGenerator. Most initialization happens lazily
-   * in process(), as a projectionBlock is required to initialize group key generator, etc.
+   * in process(), as a transform is required to initialize group key generator, etc.
    */
   @Override
   public void init() {
@@ -102,20 +101,20 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
   /**
    * Process the provided set of docId's to perform the requested aggregation-group-by-operation.
    *
-   * @param projectionBlock Projection block to process
+   * @param transformBlock Transform block to process
    */
   @Override
-  public void process(ProjectionBlock projectionBlock) {
+  public void process(TransformBlock transformBlock) {
     Preconditions
         .checkState(_inited, "Method 'process' cannot be called before 'init' for class " + getClass().getName());
 
-    initGroupBy(projectionBlock);
-    generateGroupKeysForBlock(projectionBlock);
+    initGroupBy(transformBlock);
+    generateGroupKeysForBlock(transformBlock);
     int capacityNeeded = _groupKeyGenerator.getCurrentGroupKeyUpperBound();
 
     for (int i = 0; i < _numAggrFunc; i++) {
       _resultHolderArray[i].ensureCapacity(capacityNeeded);
-      aggregateColumn(projectionBlock, _aggrFunctionContexts[i], _resultHolderArray[i]);
+      aggregateColumn(transformBlock, _aggrFunctionContexts[i], _resultHolderArray[i]);
 
       // Result holder limits the max number of group keys (default 100k), if the number of groups
       // exceeds beyond that limit, groups with lower values (as per sort order) are trimmed.
@@ -130,21 +129,20 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
   /**
    * Helper method to perform aggregation for a given column.
    *
-   * @param projectionBlock Projection block to aggregate
+   * @param transformBlock Transform block to aggregate
    * @param aggrFuncContext Aggregation function context
    * @param resultHolder Holder for results of aggregation
    */
   @SuppressWarnings("ConstantConditions")
-  private void aggregateColumn(ProjectionBlock projectionBlock, AggregationFunctionContext aggrFuncContext,
+  private void aggregateColumn(TransformBlock transformBlock, AggregationFunctionContext aggrFuncContext,
       GroupByResultHolder resultHolder) {
     AggregationFunction aggregationFunction = aggrFuncContext.getAggregationFunction();
     String[] aggregationColumns = aggrFuncContext.getAggregationColumns();
     Preconditions.checkState(aggregationColumns.length == 1);
-    int length = projectionBlock.getNumDocs();
+    int length = transformBlock.getNumDocs();
 
     if (!aggregationFunction.getName().equals(AggregationFunctionFactory.AggregationFunctionType.COUNT.getName())) {
-      ProjectionBlockValSet blockValueSet =
-          (ProjectionBlockValSet) projectionBlock.getBlockValueSet(aggregationColumns[0]);
+      BlockValSet blockValueSet = transformBlock.getBlockValueSet(aggregationColumns[0]);
       if (_hasMVGroupByColumns) {
         aggregationFunction.aggregateGroupByMV(length, _docIdToMVGroupKey, resultHolder, blockValueSet);
       } else {
@@ -181,7 +179,7 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
     Preconditions
         .checkState(_finished, "Method 'getResult' cannot be called before 'finish' for class " + getClass().getName());
 
-    // If group by was not initialized (in case of no projection blocks), return null.
+    // If group by was not initialized (in case of no transform blocks), return null.
     if (!_groupByInited) {
       return null;
     }
@@ -196,13 +194,13 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
    * For SV keys: _docIdToSVGroupKey mapping is updated.
    * For MV keys: _docIdToMVGroupKey mapping is updated.
    *
-   * @param projectionBlock Projection block for which to generate group keys
+   * @param transformBlock Transform block for which to generate group keys
    */
-  private void generateGroupKeysForBlock(ProjectionBlock projectionBlock) {
+  private void generateGroupKeysForBlock(TransformBlock transformBlock) {
     if (_hasMVGroupByColumns) {
-      _groupKeyGenerator.generateKeysForBlock(projectionBlock, _docIdToMVGroupKey);
+      _groupKeyGenerator.generateKeysForBlock(transformBlock, _docIdToMVGroupKey);
     } else {
-      _groupKeyGenerator.generateKeysForBlock(projectionBlock, _docIdToSVGroupKey);
+      _groupKeyGenerator.generateKeysForBlock(transformBlock, _docIdToSVGroupKey);
     }
   }
 
@@ -239,20 +237,18 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
    * <p> - Result holders </p>
    * <p> - Re-usable storage (eg docId to group key mapping) </p>
    *
-   * This is separate from init(), as this can only happen within process as projection block is
+   * This is separate from init(), as this can only happen within process as transform block is
    * required to create group key generator.
    *
-   * @param projectionBlock Projection block to group by.
+   * @param transformBlock Transform block to group by.
    */
-  private void initGroupBy(ProjectionBlock projectionBlock) {
+  private void initGroupBy(TransformBlock transformBlock) {
     if (_groupByInited) {
       return;
     }
 
     for (String groupByColumn : _groupByColumns) {
-
-      Block block = projectionBlock.getBlock(groupByColumn);
-      BlockMetadata metadata = block.getMetadata();
+      BlockMetadata metadata = transformBlock.getBlockMetadata(groupByColumn);
 
       if (!metadata.isSingleValue()) {
         _hasMVGroupByColumns = true;
@@ -264,7 +260,7 @@ public class DefaultGroupByExecutor implements GroupByExecutor {
     }
 
     _groupKeyGenerator = (_hasColumnsWithoutDictionary) ? new NoDictionaryGroupKeyGenerator(_groupByColumns)
-        : new DefaultGroupKeyGenerator(projectionBlock, _groupByColumns);
+        : new DefaultGroupKeyGenerator(transformBlock, _groupByColumns);
 
     int maxNumResults = _groupKeyGenerator.getGlobalGroupKeyUpperBound();
     initResultHolderArray(_numGroupsLimit, maxNumResults);

@@ -17,7 +17,7 @@ package com.linkedin.pinot.core.operator.transform.function;
 
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.core.operator.transform.result.TransformResult;
-import com.linkedin.pinot.core.operator.transform.result.DoubleArrayTransformResult;
+import com.linkedin.pinot.common.data.FieldSpec;
 import javax.annotation.Nonnull;
 
 
@@ -26,6 +26,7 @@ import javax.annotation.Nonnull;
  */
 public class SubtractionTransform implements TransformFunction {
   private static final String TRANSFORM_NAME = "sub";
+  private double[] _result;
 
   /**
    * {@inheritDoc}
@@ -39,14 +40,17 @@ public class SubtractionTransform implements TransformFunction {
   public TransformResult transform(int length, @Nonnull Object... input) {
     Preconditions.checkArgument((input.length == 2), "Subtraction transform expects exactly two arguments");
 
+    if (_result == null) {
+      _result = new double[length];
+    }
+
     double[] firsts = (double[]) input[0];
     double[] seconds = (double[]) input[1];
 
-    double[] result = new double[length];
     for (int i = 0; i < length; i++) {
-      result[i] = firsts[i] - seconds[i];
+      _result[i] = firsts[i] - seconds[i];
     }
-    return new DoubleArrayTransformResult(result);
+    return new TransformResult(_result, FieldSpec.DataType.DOUBLE);
   }
 
   /**
